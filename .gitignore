@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model weights & checkpoints (too large for git)
+models/base/*
+models/non_instruct_adapter/*
+models/sft_adapter/*
+models/dpo_adapter/*
+*.gguf
+*.safetensors
+*.bin
+outputs/
+wandb/
+
+# Keep folder structure
+!models/**/.gitkeep
+
+# Raw Kaggle dataset (download separately - see README)
+data/customer_support_tickets.csv
+data/*.zip
+
+# OS
+.DS_Store
+Thumbs.db

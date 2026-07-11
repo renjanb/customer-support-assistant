@@ -1,0 +1,22 @@
+# Core fine-tuning stack (install Unsloth per official instructions for your CUDA/torch)
+# On Google Colab, the notebooks install Unsloth themselves. For a local CUDA laptop:
+#   pip install -r requirements.txt
+#
+# Unsloth is best installed with the exact command from https://github.com/unslothai/unsloth
+# because it is CUDA/torch-version specific. Example (CUDA 12.1, torch 2.3):
+#   pip install "unsloth[cu121-torch230] @ git+https://github.com/unslothai/unsloth.git"
+
+unsloth
+trl>=0.8.6
+peft>=0.11.0
+transformers>=4.41.0
+datasets>=2.19.0
+accelerate>=0.30.0
+bitsandbytes>=0.43.0
+sentencepiece
+protobuf
+
+# Data prep / evaluation utilities
+pandas>=2.0.0
+numpy
+tqdm
