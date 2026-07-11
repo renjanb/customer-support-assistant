@@ -31,9 +31,10 @@ DPO_ADAPTER = MODELS_DIR / "dpo_adapter"
 # ---------------------------------------------------------------------------
 # Model / training hyper-parameters
 # ---------------------------------------------------------------------------
-BASE_MODEL = "unsloth/tinyllama"          # TinyLlama-1.1B (Unsloth 4-bit ready)
+BASE_MODEL = "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"   # Llama-3.2-3B-Instruct, 4-bit
 MAX_SEQ_LENGTH = 2048
 LOAD_IN_4BIT = True                        # QLoRA
+CHAT_TEMPLATE = "llama-3.1"                # Unsloth get_chat_template name (works for 3.2)
 
 # LoRA config (shared across stages)
 LORA_R = 16

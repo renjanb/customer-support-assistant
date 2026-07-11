@@ -1,4 +1,4 @@
-# Fine-Tuned Customer Support Assistant (TinyLlama + Unsloth)
+# Fine-Tuned Customer Support Assistant (Llama-3.2-3B-Instruct + Unsloth)
 
 An end-to-end, industry-style LLM fine-tuning project that turns a small
 open-source base model into a domain-specific **Customer Support Assistant**
@@ -34,9 +34,12 @@ domain-grounded answers and reduces agent workload.
   - `data/preference_dataset.jsonl` — **53** `{prompt, chosen, rejected}` triples.
 
 ## 5. Base model used
-**TinyLlama-1.1B** (`unsloth/tinyllama`), loaded in **4-bit** via Unsloth so the
-whole pipeline runs on a single free Colab **T4 GPU**. Chosen for its small size,
-fast training, and ability to run locally after fine-tuning.
+**Llama-3.2-3B-Instruct** (`unsloth/Llama-3.2-3B-Instruct-bnb-4bit`), loaded in
+**4-bit** via Unsloth so the pipeline runs on a single free Colab **T4 GPU**.
+Chosen as an instruction-tuned base that already gives coherent answers, so SFT +
+DPO refine a competent model rather than teaching a tiny raw model from scratch.
+(The project originally scaffolded TinyLlama-1.1B; we upgraded to Llama-3.2-3B for
+much better answer quality.)
 
 ## 6. Non-instruction fine-tuning approach (Stage 1)
 `notebooks/non_instruction_finetuning.ipynb`. We feed the model raw support
@@ -46,15 +49,15 @@ it learns support vocabulary and phrasing — **before** any instruction structu
 Output: `models/non_instruct_adapter/`.
 
 ## 7. Instruction fine-tuning approach (Stage 2)
-`notebooks/instruction_finetuning.ipynb`. Starting from the Stage-1 adapter (or
-the base model), we supervise-fine-tune on 104 instruction/response pairs using an
-Alpaca-style template:
+`notebooks/instruction_finetuning.ipynb`. We supervise-fine-tune on 104 instruction/response pairs using the **Llama-3 chat
+template** (`get_chat_template`) and `train_on_responses_only` so the loss is
+computed on the assistant answer only - the standard, reliable SFT recipe. Each
+example is formatted as a Llama-3 chat turn:
 ```
-### Instruction:
-{question}
-
-### Response:
-{answer}
+<|start_header_id|>user<|end_header_id|>
+{question}<|eot_id|>
+<|start_header_id|>assistant<|end_header_id|>
+{answer}<|eot_id|>
 ```
 3 epochs, `learning_rate=2e-4`. Output: `models/sft_adapter/`. The model now
 follows instructions and answers support questions with concrete steps.
@@ -72,6 +75,7 @@ QLoRA throughout (4-bit base weights + trainable LoRA adapters):
 
 | Setting | Value |
 |---|---|
+| Base model | Llama-3.2-3B-Instruct (`unsloth/Llama-3.2-3B-Instruct-bnb-4bit`) |
 | Quantization | 4-bit (`load_in_4bit=True`) → **QLoRA** |
 | LoRA rank `r` | 16 |
 | `lora_alpha` | 16 |
@@ -115,8 +119,10 @@ Short example (full tables in the reports):
   SFT stage converge on domain phrasing faster.
 
 ## 13. Challenges faced
-- **Tiny base model:** TinyLlama-1.1B can still be brief or mildly repetitive;
-  prompt template + repetition penalty at inference help.
+- **Flat-loss training bug (TinyLlama):** the original TinyLlama base plus a
+  version-mismatched trl/Unsloth stack produced zero learning (flat loss). Fixed
+  by moving to Llama-3.2-3B-Instruct with the standard chat-template +
+  `train_on_responses_only` recipe and a clean Unsloth install.
 - **Raw data is templated:** the Kaggle descriptions contain tokens like
   `{product_purchased}`; the prep script cleans these before building paragraphs.
 - **Small preference set:** 53 triples nudge behaviour but aren't enough for

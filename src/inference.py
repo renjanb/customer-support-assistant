@@ -1,34 +1,31 @@
 """
 Simple inference script for the final DPO-aligned Customer Support Assistant.
 
-Loads TinyLlama-1.1B + the DPO LoRA adapter and answers support questions.
+Loads the saved adapter (DPO if present, else SFT) on top of
+Llama-3.2-3B-Instruct and answers support questions using the Llama-3 chat
+template.
 
 Usage:
-    # interactive chat
-    python src/inference.py
-
-    # one-shot question
+    python src/inference.py                                   # interactive
     python src/inference.py --q "How can I apply for reimbursement?"
 
-Requirements: a GPU is recommended (Unsloth). On CPU-only machines, export a
-merged/GGUF model from the DPO notebook and run it with llama.cpp instead.
+A CUDA GPU is recommended (Unsloth). On CPU-only machines, export a merged/GGUF
+model from the DPO notebook and run it with llama.cpp / Ollama instead.
 """
 import argparse
 import os
 
 try:
-    from config import BASE_MODEL, MAX_SEQ_LENGTH, DPO_ADAPTER, SFT_ADAPTER
+    from config import BASE_MODEL, MAX_SEQ_LENGTH, DPO_ADAPTER, SFT_ADAPTER, CHAT_TEMPLATE
 except ImportError:
-    from src.config import BASE_MODEL, MAX_SEQ_LENGTH, DPO_ADAPTER, SFT_ADAPTER
-
-INFERENCE_TEMPLATE = "### Instruction:\n{q}\n\n### Response:\n"
+    from src.config import BASE_MODEL, MAX_SEQ_LENGTH, DPO_ADAPTER, SFT_ADAPTER, CHAT_TEMPLATE
 
 _model = None
 _tokenizer = None
 
 
 def _pick_adapter():
-    """Prefer the DPO adapter; fall back to the SFT adapter if DPO isn't trained yet."""
+    """Prefer the DPO adapter; fall back to the SFT adapter."""
     for path in (DPO_ADAPTER, SFT_ADAPTER):
         if os.path.isdir(path) and os.path.exists(os.path.join(path, "adapter_config.json")):
             return str(path)
@@ -39,22 +36,23 @@ def _pick_adapter():
 
 
 def load_model():
-    """Load base model + adapter once and cache it."""
+    """Load the saved adapter folder directly (rebuilds base + LoRA) and cache it."""
     global _model, _tokenizer
     if _model is not None:
         return _model, _tokenizer
 
     from unsloth import FastLanguageModel
+    from unsloth.chat_templates import get_chat_template
 
     adapter = _pick_adapter()
-    print(f"Loading base model '{BASE_MODEL}' + adapter '{adapter}' ...")
+    print(f"Loading adapter '{adapter}' (base: {BASE_MODEL}) ...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=BASE_MODEL,
+        model_name=adapter,          # loading the adapter dir rebuilds base + LoRA
         max_seq_length=MAX_SEQ_LENGTH,
         dtype=None,
         load_in_4bit=True,
     )
-    model.load_adapter(adapter, adapter_name="default")
+    tokenizer = get_chat_template(tokenizer, chat_template=CHAT_TEMPLATE)
     FastLanguageModel.for_inference(model)  # 2x faster generation
 
     _model, _tokenizer = model, tokenizer
@@ -64,19 +62,22 @@ def load_model():
 def generate_answer(question: str, max_new_tokens: int = 200) -> str:
     """Return the assistant's answer to a single support question."""
     model, tokenizer = load_model()
-    prompt = INFERENCE_TEMPLATE.format(q=question.strip())
-    inputs = tokenizer([prompt], return_tensors="pt").to(model.device)
+    messages = [{"role": "user", "content": question.strip()}]
+    input_ids = tokenizer.apply_chat_template(
+        messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+    ).to(model.device)
     output = model.generate(
-        **inputs,
+        input_ids=input_ids,
         max_new_tokens=max_new_tokens,
         temperature=0.7,
         top_p=0.9,
         do_sample=True,
         repetition_penalty=1.1,
+        eos_token_id=tokenizer.eos_token_id,
         pad_token_id=tokenizer.eos_token_id,
     )
-    text = tokenizer.batch_decode(output, skip_special_tokens=True)[0]
-    return text.split("### Response:")[-1].strip()
+    # decode only the newly generated tokens
+    return tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
 
 
 def _interactive():
@@ -102,10 +103,9 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     if args.q:
-        # Example from the assignment:
-        #   question = "How can I apply for reimbursement?"
-        #   answer = generate_answer(question)
-        #   print(answer)
+        # question = "How can I apply for reimbursement?"
+        # answer = generate_answer(question)
+        # print(answer)
         print(generate_answer(args.q, max_new_tokens=args.max_new_tokens))
     else:
         _interactive()
