@@ -44,7 +44,7 @@ much better answer quality.)
 ## 6. Non-instruction fine-tuning approach (Stage 1)
 `notebooks/non_instruction_finetuning.ipynb`. We feed the model raw support
 paragraphs (from `non_instruction_data.csv`) and train it with plain next-token
-prediction (`packing=True`, 2 epochs). This *domain-adapts* the base model —
+prediction (`packing=False`, 3 epochs). This *domain-adapts* the base model —
 it learns support vocabulary and phrasing — **before** any instruction structure.
 Output: `models/non_instruct_adapter/`.
 
@@ -228,9 +228,31 @@ python src/inference.py
 git init
 git add .
 git commit -m "Fine-tuned Customer Support Assistant: data, notebooks, reports, inference"
-git branch -M main
-git remote add origin https://github.com/<your-username>/customer-support-assistant.git
-git push -u origin main
+git b
+## Web front end + Hugging Face
+
+The project ships a simple **Gradio** chat UI (`app.py`) that loads the fine-tuned
+model directly from the **Hugging Face Hub**.
+
+**1. Push your DPO adapter to the Hub** (`notebooks/upload_to_huggingface.ipynb`):
+create a free Hugging Face account and a **write** token, set your username/token
+in the notebook, and run it. It pushes the LoRA adapter + tokenizer to
+`your-username/customer-support-assistant-dpo`.
+
+**2. Launch the front end** (needs a GPU, e.g. Colab):
+```bash
+pip install -r requirements-app.txt
+export HF_MODEL_ID="your-username/customer-support-assistant-dpo"
+python app.py          # prints a public Gradio link (share=True)
 ```
-Model weights and the raw Kaggle CSV are excluded via `.gitignore` (too large /
-licensed). Share trained adapters via Hugging Face Hub or a release asset instead.
+Or in Colab (GPU runtime):
+```python
+!pip install -q gradio transformers peft accelerate bitsandbytes
+import os; os.environ["HF_MODEL_ID"] = "your-username/customer-support-assistant-dpo"
+!git clone https://github.com/<your-username>/customer-support-assistant.git
+%cd customer-support-assistant
+!python app.py
+```
+The app loads the base model in 4-bit, applies your adapter from the Hub, and
+serves a chat box with example questions. Because the model repo is public, the
+front end needs no token to load it.
