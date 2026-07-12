@@ -13,10 +13,7 @@ env/
 models/base/*
 models/non_instruct_adapter/*
 models/sft_adapter/*
-models/dpo_adapter/*
-*.gguf
-*.safetensors
-*.bin
+
 outputs/
 wandb/
 
